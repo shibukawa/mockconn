@@ -115,7 +115,7 @@ func (c Conn) getAction(i int) Action {
 
 // NewConn creates mock connection instance
 // if t is passed, it calls t.Errorf in unit tests.
-func NewConn(t *testing.T) *Conn {
+func New(t *testing.T) *Conn {
 	return &Conn{
 		t:          t,
 		localAddr:  &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 12345},

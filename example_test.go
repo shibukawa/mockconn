@@ -6,7 +6,7 @@ import (
 )
 
 func Example() {
-	mock := mockconn.NewConn(nil)
+	mock := mockconn.New(nil)
 	mock.SetExpectedActions(
 		mockconn.Read([]byte("welcome from server")),
 		mockconn.Write([]byte("hello!!")),
@@ -22,7 +22,7 @@ func Example() {
 }
 
 func ExampleConn_Verify() {
-	mock := mockconn.NewConn(nil)
+	mock := mockconn.New(nil)
 	mock.SetExpectedActions(
 		mockconn.Write([]byte("hello!!")),
 		mockconn.Close(),

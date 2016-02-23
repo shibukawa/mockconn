@@ -6,12 +6,12 @@ import (
 )
 
 func TestAssignToNetConn(t *testing.T) {
-	var mock net.Conn = NewConn(t)
+	var mock net.Conn = New(t)
 	mock.Close()
 }
 
 func TestReadCloseScenario(t *testing.T) {
-	mock := NewConn(t)
+	mock := New(t)
 	mock.SetExpectedActions(
 		Read([]byte("hello world")),
 		Close(),
@@ -42,7 +42,7 @@ func TestReadCloseScenario(t *testing.T) {
 }
 
 func TestReadError(t *testing.T) {
-	mock := NewConn(nil)
+	mock := New(nil)
 	mock.SetExpectedActions(
 		Close(),
 	)
@@ -61,7 +61,7 @@ func TestReadError(t *testing.T) {
 }
 
 func TestCloseError(t *testing.T) {
-	mock := NewConn(nil)
+	mock := New(nil)
 	mock.SetExpectedActions(
 		Read([]byte("hello world")),
 	)
@@ -79,7 +79,7 @@ func TestCloseError(t *testing.T) {
 }
 
 func TestWriteCloseScenario(t *testing.T) {
-	mock := NewConn(t)
+	mock := New(t)
 	mock.SetExpectedActions(
 		Write([]byte("helloworld")),
 		Close(),
@@ -109,7 +109,7 @@ func TestWriteCloseScenario(t *testing.T) {
 }
 
 func TestWriteError(t *testing.T) {
-	mock := NewConn(nil)
+	mock := New(nil)
 	mock.SetExpectedActions(
 		Close(),
 	)
