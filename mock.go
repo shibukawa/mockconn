@@ -1,6 +1,7 @@
 package mockconn
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"testing"
@@ -104,6 +105,7 @@ type Conn struct {
 	current    int
 	localAddr  net.Addr
 	remoteAddr net.Addr
+	closed     bool
 }
 
 func (c Conn) getAction(i int) Action {
@@ -183,6 +185,9 @@ func (c *Conn) addError(err error) error {
 // Read can be made to time out and return a Error with Timeout() == true
 // after a fixed time limit; see SetDeadline and SetReadDeadline.
 func (c *Conn) Read(b []byte) (n int, err error) {
+	if c.closed {
+		return 0, errors.New("already closed")
+	}
 	current := c.getAction(c.current)
 	switch current.Type() {
 	case ReadActionType:
@@ -216,6 +221,9 @@ func (c *Conn) Read(b []byte) (n int, err error) {
 // Write can be made to time out and return a Error with Timeout() == true
 // after a fixed time limit; see SetDeadline and SetWriteDeadline.
 func (c *Conn) Write(b []byte) (n int, err error) {
+	if c.closed {
+		return 0, errors.New("already closed")
+	}
 	current := c.getAction(c.current)
 	switch current.Type() {
 	case ReadActionType:
@@ -255,6 +263,9 @@ func (c *Conn) Write(b []byte) (n int, err error) {
 // Close closes the connection.
 // Any blocked Read or Write operations will be unblocked and return errors.
 func (c *Conn) Close() error {
+	if c.closed {
+		return errors.New("already closed")
+	}
 	current := c.getAction(c.current)
 	switch current.Type() {
 	case ReadActionType:
@@ -269,6 +280,7 @@ func (c *Conn) Close() error {
 	case CloseActionType:
 		c.current++
 	}
+	c.closed = true
 	return nil
 }
 
@@ -296,12 +308,18 @@ func (c *Conn) RemoteAddr() net.Addr {
 //
 // A zero value for t means I/O operations will not time out.
 func (c *Conn) SetDeadline(t time.Time) error {
+	if c.closed {
+		return errors.New("closed")
+	}
 	return nil
 }
 
 // SetReadDeadline sets the deadline for future Read calls.
 // A zero value for t means Read will not time out.
 func (c *Conn) SetReadDeadline(t time.Time) error {
+	if c.closed {
+		return errors.New("closed")
+	}
 	return nil
 }
 
@@ -310,5 +328,8 @@ func (c *Conn) SetReadDeadline(t time.Time) error {
 // some of the data was successfully written.
 // A zero value for t means Write will not time out.
 func (c *Conn) SetWriteDeadline(t time.Time) error {
+	if c.closed {
+		return errors.New("closed")
+	}
 	return nil
 }
