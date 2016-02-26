@@ -174,12 +174,12 @@ func (c *Conn) Verify() []error {
 		read := current.(*readAction)
 		if len(read.data) > 0 {
 			c.addError(fmt.Errorf("%s: mock socket scenario %d - there is remained data to read: %s", errorLabel, c.current+1, yellow(read.data)))
+		} else {
+			c.current++
 		}
-		c.current++
 	case WriteActionType:
 		write := current.(*writeAction)
 		c.addError(fmt.Errorf("%s: mock socket scenario %d - there is remained data to write: %s", errorLabel, c.current+1, yellow(write.data)))
-		c.current++
 	}
 	if c.current < len(c.scenario) {
 		c.addError(fmt.Errorf("%s: Unconsumed senario exists - %d/%d", errorLabel, len(c.scenario)-c.current, len(c.scenario)))
@@ -188,6 +188,7 @@ func (c *Conn) Verify() []error {
 	c.errors = errors
 
 	if c.t != nil {
+		c.t.Logf("c.current: %d\n", c.current)
 		var buffer bytes.Buffer
 		buffer.WriteString("Mock Socket Scenario Summary:\n")
 		for i := 0; i < len(c.scenario); i++ {
@@ -203,12 +204,12 @@ func (c *Conn) Verify() []error {
 			switch current.Type() {
 			case ReadActionType:
 				read := current.(*readAction)
-				fmt.Fprintf(&buffer, "%s (%d) Read(): %s\n", result, c.current+1, logText(ok, read.original, read.data))
+				fmt.Fprintf(&buffer, "%s (%d) Read(): %s\n", result, i+1, logText(ok, read.original, read.data))
 			case WriteActionType:
 				write := current.(*writeAction)
-				fmt.Fprintf(&buffer, "%s (%d) Write(): %s\n", result, c.current+1, logText(ok, write.original, write.data))
+				fmt.Fprintf(&buffer, "%s (%d) Write(): %s\n", result, i+1, logText(ok, write.original, write.data))
 			case CloseActionType:
-				fmt.Fprintf(&buffer, "%s (%d) Close(): %s\n", result, c.current+1)
+				fmt.Fprintf(&buffer, "%s (%d) Close(): %s\n", result, i+1)
 			}
 		}
 		c.t.Log(buffer.String())
@@ -262,7 +263,8 @@ func (c *Conn) Read(b []byte) (n int, err error) {
 			c.current++
 			current = c.scenario[c.current]
 		} else {
-			return 0, c.addError(fmt.Errorf("%s: socket scenario %d - should close, but Read() is called", errorLabel, c.current+1))
+			c.t.Logf("c.current: %d\n", c.current)
+			return 0, c.addError(fmt.Errorf("%s: socket scenario %d - should write, but Read() is called", errorLabel, c.current+1))
 		}
 	case CloseActionType:
 		return 0, c.addError(fmt.Errorf("%s: socket scenario %d - should close, but Read() is called", errorLabel, c.current+1))
