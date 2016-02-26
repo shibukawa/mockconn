@@ -33,7 +33,7 @@ func ExampleConn_Verify() {
 		fmt.Println(err)
 	}
 	// Output:
-	// socket scenario 1: Write() expected='hello!!' actual='good morning!!'
-	// mock socket scenario 1: there is remained data to write: 'hello!!'
-	// mock socket scenario 2: Close() should be called
+	// Error: socket scenario 1 - Write() expected="hello!!" actual="good morning!!"
+	// Error: mock socket scenario 1 - there is remained data to write: "hello!!"
+	// Error: Unconsumed senario exists - 2/2
 }

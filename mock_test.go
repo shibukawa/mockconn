@@ -70,7 +70,7 @@ func TestCloseError(t *testing.T) {
 		t.Error("err should not be nil")
 	}
 	errors := mock.Verify()
-	if len(errors) != 2 {
+	if len(errors) != 3 {
 		t.Errorf("mock should have 2 errors, but %d", len(errors))
 		for i, err := range errors {
 			t.Log(i+1, err.Error())
