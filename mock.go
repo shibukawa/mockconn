@@ -1,8 +1,10 @@
 package mockconn
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"github.com/fatih/color"
 	"net"
 	"testing"
 	"time"
@@ -21,13 +23,30 @@ const (
 	nullActionType
 )
 
+var (
+	errorLabel  = color.RedString("Error")
+	ngLabel     = color.RedString("NG")
+	okLabel     = color.GreenString("OK")
+	cyanColor   = color.New(color.FgCyan).SprintFunc()
+	yellowColor = color.New(color.FgYellow).SprintFunc()
+)
+
+func cyan(value []byte) string {
+	return cyanColor(fmt.Sprintf("%#v", string(value)))
+}
+
+func yellow(value []byte) string {
+	return yellowColor(fmt.Sprintf("%#v", string(value)))
+}
+
 // Action is an interface of actions in scenario
 type Action interface {
 	Type() ActionType
 }
 
 type readAction struct {
-	data []byte
+	data     []byte
+	original []byte
 }
 
 // Read creates action to read
@@ -45,7 +64,8 @@ type readAction struct {
 //   conn.Read(d) // ''    : ok
 func Read(data []byte) Action {
 	return &readAction{
-		data: data,
+		data:     data,
+		original: data,
 	}
 }
 
@@ -54,7 +74,8 @@ func (r readAction) Type() ActionType {
 }
 
 type writeAction struct {
-	data []byte
+	data     []byte
+	original []byte
 }
 
 // Write creates action to write
@@ -70,7 +91,8 @@ type writeAction struct {
 //   conn.Write([]byte("tue") // ok
 func Write(data []byte) Action {
 	return &writeAction{
-		data: data,
+		data:     data,
+		original: data,
 	}
 }
 
@@ -149,28 +171,57 @@ func (c *Conn) Verify() []error {
 	case ReadActionType:
 		read := current.(*readAction)
 		if len(read.data) > 0 {
-			c.addError(fmt.Errorf("mock socket scenario %d: there is remained data to read: '%s'", c.current+1, string(read.data)))
+			c.addError(fmt.Errorf("%s: mock socket scenario %d - there is remained data to read: %s", errorLabel, c.current+1, yellow(read.data)))
 		}
 		c.current++
 	case WriteActionType:
 		write := current.(*writeAction)
-		c.addError(fmt.Errorf("mock socket scenario %d: there is remained data to write: '%s'", c.current+1, string(write.data)))
+		c.addError(fmt.Errorf("%s: mock socket scenario %d - there is remained data to write: %s", errorLabel, c.current+1, yellow(write.data)))
 		c.current++
 	}
-	for i := c.current; i < len(c.scenario); i++ {
-		current := c.getAction(i)
-		switch current.Type() {
-		case ReadActionType:
-			c.addError(fmt.Errorf("mock socket scenario %d: Read() should be called", c.current+1))
-		case WriteActionType:
-			c.addError(fmt.Errorf("mock socket scenario %d: Write() should be called", c.current+1))
-		case CloseActionType:
-			c.addError(fmt.Errorf("mock socket scenario %d: Close() should be called", c.current+1))
-		}
+	if c.current < len(c.scenario) {
+		c.addError(fmt.Errorf("%s: Unconsumed senario exists - %d/%d", errorLabel, len(c.scenario)-c.current, len(c.scenario)))
 	}
 	result := c.errors
 	c.errors = errors
+
+	if c.t != nil {
+		var buffer bytes.Buffer
+		buffer.WriteString("Mock Socket Scenario Summary:\n")
+		for i := 0; i < len(c.scenario); i++ {
+			current := c.getAction(i)
+			var result string
+			var ok bool
+			if i >= c.current {
+				result = ngLabel
+			} else {
+				result = okLabel
+				ok = true
+			}
+			switch current.Type() {
+			case ReadActionType:
+				read := current.(*readAction)
+				fmt.Fprintf(&buffer, "%s (%d) Read(): %s\n", result, c.current+1, logText(ok, read.original, read.data))
+			case WriteActionType:
+				write := current.(*writeAction)
+				fmt.Fprintf(&buffer, "%s (%d) Write(): %s\n", result, c.current+1, logText(ok, write.original, write.data))
+			case CloseActionType:
+				fmt.Fprintf(&buffer, "%s (%d) Close(): %s\n", result, c.current+1)
+			}
+		}
+		c.t.Log(buffer.String())
+	}
 	return result
+}
+
+func logText(ok bool, original, actual []byte) string {
+	if ok {
+		if len(actual) != 0 && len(actual) != len(original) {
+			return cyan(original[:len(original)-len(actual)]) + yellow(actual)
+		}
+		return cyan(original)
+	}
+	return yellow(original)
 }
 
 func (c *Conn) addError(err error) error {
@@ -209,10 +260,10 @@ func (c *Conn) Read(b []byte) (n int, err error) {
 			c.current++
 			current = c.scenario[c.current]
 		} else {
-			return 0, c.addError(fmt.Errorf("socket scenario %d: should close, but Read() is called", c.current+1))
+			return 0, c.addError(fmt.Errorf("%s: socket scenario %d - should close, but Read() is called", errorLabel, c.current+1))
 		}
 	case CloseActionType:
-		return 0, c.addError(fmt.Errorf("socket scenario %d: should close, but Read() is called", c.current+1))
+		return 0, c.addError(fmt.Errorf("%s: socket scenario %d - should close, but Read() is called", errorLabel, c.current+1))
 	}
 	return 0, nil
 }
@@ -229,7 +280,7 @@ func (c *Conn) Write(b []byte) (n int, err error) {
 	case ReadActionType:
 		read := current.(*readAction)
 		if len(read.data) > 0 {
-			return 0, c.addError(fmt.Errorf("socket scenario %d: should read data, but Write() is called", c.current+1))
+			return 0, c.addError(fmt.Errorf("%s: socket scenario %d - should read data, but Write() is called", errorLabel, c.current+1))
 		}
 		c.current++
 		return c.Write(b)
@@ -244,7 +295,7 @@ func (c *Conn) Write(b []byte) (n int, err error) {
 				}
 			}
 			if !same {
-				return 0, c.addError(fmt.Errorf("socket scenario %d: Write() expected='%s' actual='%s'", c.current+1, string(write.data), string(b)))
+				return 0, c.addError(fmt.Errorf("%s: socket scenario %d - Write() expected=%s actual=%s", errorLabel, c.current+1, cyan(write.data), yellow(b)))
 			}
 			if len(b) == len(write.data) {
 				c.current++
@@ -253,9 +304,9 @@ func (c *Conn) Write(b []byte) (n int, err error) {
 			}
 			return len(b), nil
 		}
-		return 0, c.addError(fmt.Errorf("socket scenario %d: Write() expected='%s' actual='%s'", c.current+1, string(write.data), string(b)))
+		return 0, c.addError(fmt.Errorf("%s: socket scenario %d - Write() expected=%s actual=%s", errorLabel, c.current+1, cyan(write.data), yellow(b)))
 	case CloseActionType:
-		return 0, c.addError(fmt.Errorf("socket scenario %d: should close, but Write() is called", c.current+1))
+		return 0, c.addError(fmt.Errorf("%s: socket scenario %d - should close, but Write() is called", errorLabel, c.current+1))
 	}
 	return 0, nil
 }
@@ -271,12 +322,12 @@ func (c *Conn) Close() error {
 	case ReadActionType:
 		read := current.(*readAction)
 		if len(read.data) > 0 {
-			return c.addError(fmt.Errorf("socket scenario %d: should read data, but Close() is called", c.current+1))
+			return c.addError(fmt.Errorf("%s: socket scenario %d - should read data, but Close() is called", errorLabel, c.current+1))
 		}
 		c.current++
 		return c.Close()
 	case WriteActionType:
-		return c.addError(fmt.Errorf("socket scenario %d: should write data, but Close() is called", c.current+1))
+		return c.addError(fmt.Errorf("%s: socket scenario %d - should write data, but Close() is called", errorLabel, c.current+1))
 	case CloseActionType:
 		c.current++
 	}
