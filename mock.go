@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-// ActionType is an enum value to identify actions in scenario
+// ActionType is an enum value to identify actions in scenario.
 type ActionType int
 
 const (
@@ -39,7 +39,7 @@ func yellow(value []byte) string {
 	return yellowColor(fmt.Sprintf("%#v", string(value)))
 }
 
-// Action is an interface of actions in scenario
+// Action is an interface of actions in scenario.
 type Action interface {
 	Type() ActionType
 }
@@ -49,13 +49,13 @@ type readAction struct {
 	original []byte
 }
 
-// Read creates action to read
+// Read creates action to read.
 //
 // You can read data by using several Conn.Read() call from single Read action:
 //
 //   conn := mockconn.New(t)
 //   conn.SetExpectedActions(
-//       Read([]byte("sunmontue")
+//       mockconn.Read([]byte("sunmontue"),
 //   )
 //   d := make([]byte, 3)
 //   conn.Read(d) // 'sun' : ok
@@ -78,13 +78,13 @@ type writeAction struct {
 	original []byte
 }
 
-// Write creates action to write
+// Write creates action to write.
 //
 // You can write data by using several Conn.Write() call to single Write action:
 //
 //   conn := mockconn.New(t)
 //   conn.SetExpectedActions(
-//       Write([]byte("sunmontue")
+//       mockconn.Write([]byte("sunmontue"),
 //   )
 //   conn.Write([]byte("sun") // ok
 //   conn.Write([]byte("mon") // ok
@@ -103,7 +103,7 @@ func (w writeAction) Type() ActionType {
 type closeAction struct {
 }
 
-// Close creates action to close
+// Close creates action to close.
 func Close() Action {
 	return &closeAction{}
 }
@@ -119,7 +119,7 @@ func (n nullAction) Type() ActionType {
 	return nullActionType
 }
 
-// Conn is a mock object that has net.Conn interface
+// Conn is a mock object that has net.Conn interface.
 type Conn struct {
 	t          *testing.T
 	errors     []error
@@ -137,8 +137,10 @@ func (c Conn) getAction(i int) Action {
 	return &nullAction{}
 }
 
-// NewConn creates mock connection instance
-// if t is passed, it calls t.Errorf in unit tests.
+// NewConn creates mock connection instance.
+//
+// If t is passed, it calls t.Errorf in unit tests and
+// show scenario summary when Verify() is called.
 func New(t *testing.T) *Conn {
 	return &Conn{
 		t:          t,
@@ -157,7 +159,7 @@ func (c *Conn) SetRemoteAddr(addr net.Addr) {
 	c.remoteAddr = addr
 }
 
-// SetExpectedActions sets expected behavior
+// SetExpectedActions sets expected behavior.
 func (c *Conn) SetExpectedActions(scenario ...Action) {
 	c.scenario = scenario
 }
