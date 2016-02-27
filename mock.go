@@ -24,19 +24,28 @@ const (
 )
 
 var (
-	errorLabel  = color.RedString("Error")
-	ngLabel     = color.RedString("NG")
-	okLabel     = color.GreenString("OK")
-	cyanColor   = color.New(color.FgCyan).SprintFunc()
-	yellowColor = color.New(color.FgYellow).SprintFunc()
+	errorColorLabel   = color.RedString("Error")
+	ngColorLabel      = color.RedString("NG")
+	okColorLabel      = color.GreenString("OK")
+	errorNoColorLabel = "Error"
+	ngNoColorLabel    = "NG"
+	okNoColorLabel    = "OK"
+	cyanColor         = color.New(color.FgCyan).SprintFunc()
+	yellowColor       = color.New(color.FgYellow).SprintFunc()
 )
 
-func cyan(value []byte) string {
-	return cyanColor(fmt.Sprintf("%#v", string(value)))
+func cyan(value []byte, useColor bool) string {
+	if useColor {
+		return cyanColor(fmt.Sprintf("%#v", string(value)))
+	}
+	return fmt.Sprintf("%#v", string(value))
 }
 
-func yellow(value []byte) string {
-	return yellowColor(fmt.Sprintf("%#v", string(value)))
+func yellow(value []byte, useColor bool) string {
+	if useColor {
+		return yellowColor(fmt.Sprintf("%#v", string(value)))
+	}
+	return fmt.Sprintf("%#v", string(value))
 }
 
 // Action is an interface of actions in scenario.
@@ -166,6 +175,7 @@ func (c *Conn) SetExpectedActions(scenario ...Action) {
 
 // Verify returns all errors
 func (c *Conn) Verify() []error {
+	useColor := (c.t != nil)
 	errors := make([]error, len(c.errors))
 	copy(errors, c.errors)
 	current := c.getAction(c.current)
@@ -173,16 +183,16 @@ func (c *Conn) Verify() []error {
 	case ReadActionType:
 		read := current.(*readAction)
 		if len(read.data) > 0 {
-			c.addError(fmt.Errorf("%s: mock socket scenario %d - there is remained data to read: %s", errorLabel, c.current+1, yellow(read.data)))
+			c.addError(fmt.Errorf("%s: mock socket scenario %d - there is remained data to read: %s", c.errorLabel(), c.current+1, yellow(read.data, useColor)))
 		} else {
 			c.current++
 		}
 	case WriteActionType:
 		write := current.(*writeAction)
-		c.addError(fmt.Errorf("%s: mock socket scenario %d - there is remained data to write: %s", errorLabel, c.current+1, yellow(write.data)))
+		c.addError(fmt.Errorf("%s: mock socket scenario %d - there is remained data to write: %s", c.errorLabel(), c.current+1, yellow(write.data, useColor)))
 	}
 	if c.current < len(c.scenario) {
-		c.addError(fmt.Errorf("%s: Unconsumed senario exists - %d/%d", errorLabel, len(c.scenario)-c.current, len(c.scenario)))
+		c.addError(fmt.Errorf("%s: Unconsumed senario exists - %d/%d", c.errorLabel(), len(c.scenario)-c.current, len(c.scenario)))
 	}
 	result := c.errors
 	c.errors = errors
@@ -196,18 +206,26 @@ func (c *Conn) Verify() []error {
 			var result string
 			var ok bool
 			if i >= c.current {
-				result = ngLabel
+				if c.t != nil {
+					result = ngColorLabel
+				} else {
+					result = ngNoColorLabel
+				}
 			} else {
-				result = okLabel
+				if c.t != nil {
+					result = okColorLabel
+				} else {
+					result = okNoColorLabel
+				}
 				ok = true
 			}
 			switch current.Type() {
 			case ReadActionType:
 				read := current.(*readAction)
-				fmt.Fprintf(&buffer, "%s (%d) Read(): %s\n", result, i+1, logText(ok, read.original, read.data))
+				fmt.Fprintf(&buffer, "%s (%d) Read(): %s\n", result, i+1, logText(ok, read.original, read.data, c.t))
 			case WriteActionType:
 				write := current.(*writeAction)
-				fmt.Fprintf(&buffer, "%s (%d) Write(): %s\n", result, i+1, logText(ok, write.original, write.data))
+				fmt.Fprintf(&buffer, "%s (%d) Write(): %s\n", result, i+1, logText(ok, write.original, write.data, c.t))
 			case CloseActionType:
 				fmt.Fprintf(&buffer, "%s (%d) Close(): %s\n", result, i+1)
 			}
@@ -217,14 +235,15 @@ func (c *Conn) Verify() []error {
 	return result
 }
 
-func logText(ok bool, original, actual []byte) string {
+func logText(ok bool, original, actual []byte, t *testing.T) string {
+	useColor := (t != nil)
 	if ok {
 		if len(actual) != 0 && len(actual) != len(original) {
-			return cyan(original[:len(original)-len(actual)]) + yellow(actual)
+			return cyan(original[:len(original)-len(actual)], useColor) + yellow(actual, useColor)
 		}
-		return cyan(original)
+		return cyan(original, useColor)
 	}
-	return yellow(original)
+	return yellow(original, useColor)
 }
 
 func (c *Conn) addError(err error) error {
@@ -264,10 +283,10 @@ func (c *Conn) Read(b []byte) (n int, err error) {
 			current = c.scenario[c.current]
 		} else {
 			c.t.Logf("c.current: %d\n", c.current)
-			return 0, c.addError(fmt.Errorf("%s: socket scenario %d - should write, but Read() is called", errorLabel, c.current+1))
+			return 0, c.addError(fmt.Errorf("%s: socket scenario %d - should write, but Read() is called", c.errorLabel(), c.current+1))
 		}
 	case CloseActionType:
-		return 0, c.addError(fmt.Errorf("%s: socket scenario %d - should close, but Read() is called", errorLabel, c.current+1))
+		return 0, c.addError(fmt.Errorf("%s: socket scenario %d - should close, but Read() is called", c.errorLabel(), c.current+1))
 	}
 	return 0, nil
 }
@@ -276,6 +295,7 @@ func (c *Conn) Read(b []byte) (n int, err error) {
 // Write can be made to time out and return a Error with Timeout() == true
 // after a fixed time limit; see SetDeadline and SetWriteDeadline.
 func (c *Conn) Write(b []byte) (n int, err error) {
+	useColor := (c.t != nil)
 	if c.closed {
 		return 0, errors.New("already closed")
 	}
@@ -284,7 +304,7 @@ func (c *Conn) Write(b []byte) (n int, err error) {
 	case ReadActionType:
 		read := current.(*readAction)
 		if len(read.data) > 0 {
-			return 0, c.addError(fmt.Errorf("%s: socket scenario %d - should read data, but Write() is called", errorLabel, c.current+1))
+			return 0, c.addError(fmt.Errorf("%s: socket scenario %d - should read data, but Write() is called", c.errorLabel(), c.current+1))
 		}
 		c.current++
 		return c.Write(b)
@@ -299,7 +319,7 @@ func (c *Conn) Write(b []byte) (n int, err error) {
 				}
 			}
 			if !same {
-				return 0, c.addError(fmt.Errorf("%s: socket scenario %d - Write() expected=%s actual=%s", errorLabel, c.current+1, cyan(write.data), yellow(b)))
+				return 0, c.addError(fmt.Errorf("%s: socket scenario %d - Write() expected=%s actual=%s", c.errorLabel(), c.current+1, cyan(write.data, useColor), yellow(b, useColor)))
 			}
 			if len(b) == len(write.data) {
 				c.current++
@@ -308,9 +328,9 @@ func (c *Conn) Write(b []byte) (n int, err error) {
 			}
 			return len(b), nil
 		}
-		return 0, c.addError(fmt.Errorf("%s: socket scenario %d - Write() expected=%s actual=%s", errorLabel, c.current+1, cyan(write.data), yellow(b)))
+		return 0, c.addError(fmt.Errorf("%s: socket scenario %d - Write() expected=%s actual=%s", c.errorLabel(), c.current+1, cyan(write.data, useColor), yellow(b, useColor)))
 	case CloseActionType:
-		return 0, c.addError(fmt.Errorf("%s: socket scenario %d - should close, but Write() is called", errorLabel, c.current+1))
+		return 0, c.addError(fmt.Errorf("%s: socket scenario %d - should close, but Write() is called", c.errorLabel(), c.current+1))
 	}
 	return 0, nil
 }
@@ -326,12 +346,12 @@ func (c *Conn) Close() error {
 	case ReadActionType:
 		read := current.(*readAction)
 		if len(read.data) > 0 {
-			return c.addError(fmt.Errorf("%s: socket scenario %d - should read data, but Close() is called", errorLabel, c.current+1))
+			return c.addError(fmt.Errorf("%s: socket scenario %d - should read data, but Close() is called", c.errorLabel(), c.current+1))
 		}
 		c.current++
 		return c.Close()
 	case WriteActionType:
-		return c.addError(fmt.Errorf("%s: socket scenario %d - should write data, but Close() is called", errorLabel, c.current+1))
+		return c.addError(fmt.Errorf("%s: socket scenario %d - should write data, but Close() is called", c.errorLabel(), c.current+1))
 	case CloseActionType:
 		c.current++
 	}
@@ -387,4 +407,11 @@ func (c *Conn) SetWriteDeadline(t time.Time) error {
 		return errors.New("closed")
 	}
 	return nil
+}
+
+func (c Conn) errorLabel() string {
+	if c.t != nil {
+		return errorColorLabel
+	}
+	return errorNoColorLabel
 }
